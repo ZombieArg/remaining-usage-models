@@ -46,6 +46,17 @@ The setup executable installs the app for the current Windows user. The
 optional `Remaining-Usage-<version>-portable.exe` is an unpack-and-run build;
 it does not add an installed application entry.
 
+### If Windows SmartScreen warns you
+
+Until a release is code-signed, Windows shows a blue "Windows protected your
+PC" screen for the downloaded executable. That warning means the file has no
+established publisher reputation yet. It is not a finding that the file is
+harmful, and it is not a substitute for checking the file yourself.
+
+Verify the SHA-256 hash first, as described below. If it matches the published
+`SHA256SUMS.txt`, you may choose **More info** and then **Run anyway**. If the
+hash does not match, delete the file and open an issue.
+
 ### Verify a download
 
 Download `SHA256SUMS.txt` from the same GitHub Release as the executable.
