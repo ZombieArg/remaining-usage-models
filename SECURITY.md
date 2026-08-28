@@ -2,9 +2,10 @@
 
 ## Supported versions
 
-Only the latest release published in GitHub Releases is supported with security
-fixes. Development builds and artifacts shared outside Releases are not a
-trusted distribution channel.
+Only the latest published release is supported with security fixes. No
+prebuilt binaries are published yet, so the supported form is currently a
+build from source at the latest tagged commit. Artifacts shared outside this
+repository are not a trusted distribution channel.
 
 ## Reporting a vulnerability
 
@@ -17,8 +18,12 @@ https://github.com/ZombieArg/remaining-usage-models/security/advisories/new
 
 Include reproduction steps, the app and CLI versions, impact, and any safe
 proof of concept. Do not include API keys, tokens, cookies, terminal history,
-or personal usage data. We will acknowledge the report and coordinate a fix
-before public disclosure.
+or personal usage data.
+
+Reports are read and handled on a best-effort basis by one person in their
+spare time. Acknowledgement may take a while, and this project cannot offer a
+guaranteed response time or a disclosure deadline. Please take that into
+account before deciding how and when to disclose publicly.
 
 ## Security model
 

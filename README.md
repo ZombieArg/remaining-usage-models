@@ -26,9 +26,26 @@ The interface follows the Windows display language: Spanish for `es-*` locales
 Read the [privacy notes](PRIVACY.md) and [security model](SECURITY.md) before
 installing.
 
+## Maintenance and support
+
+This is a personal project, built and maintained by one person in spare time.
+It is shared because it may be useful, not because it is a supported product.
+
+- Issues and pull requests are welcome, and may go unanswered.
+- There is no support commitment, response time, or roadmap.
+- Provider CLIs change their output without notice. When that happens the app
+  reports **unavailable** or **stale** rather than guessing, and a fix arrives
+  whenever it arrives.
+
+If you need something dependable, fork it. The MIT license is there for that.
+
 ## Install and use
 
 This first public release supports **Windows 10/11** only.
+
+> Prebuilt binaries are not published yet. Until they are, use
+> [Build from source](#build-from-source); the numbered steps below describe
+> the installer route for when a release exists.
 
 1. Install the provider CLI or CLIs you want to monitor, then sign in to each
    using its normal, official flow. The app needs no API key and does not
