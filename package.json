@@ -39,7 +39,7 @@
     "electron-builder": "^26.0.12",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.11"
   },
   "build": {
     "appId": "com.zombiearg.remainingusage",
