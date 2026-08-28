@@ -1,0 +1,77 @@
+{
+  "name": "remaining-usage-models",
+  "version": "0.1.0",
+  "private": true,
+  "author": "ZombieArg",
+  "description": "Local Windows desktop monitor for Codex and Claude plan usage.",
+  "main": "dist/main/main/index.js",
+  "engines": {
+    "node": ">=20 <25",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:electron": "npm run build:main && electron .",
+    "build": "npm run typecheck && npm run build:main && vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "audit": "npm audit --audit-level=low",
+    "verify": "npm run test && npm run build && npm run audit",
+    "dist": "npm run build && electron-builder --win nsis portable",
+    "dist:installer": "npm run build && electron-builder --win nsis",
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "checksums": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/write-checksums.ps1"
+  },
+  "dependencies": {
+    "@xterm/headless": "^6.0.0",
+    "node-pty": "^1.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^3.0.0"
+  },
+  "build": {
+    "appId": "com.zombiearg.remainingusage",
+    "productName": "Remaining Usage",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "Remaining-Usage-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "Remaining-Usage-${version}-portable.exe"
+    }
+  }
+}
