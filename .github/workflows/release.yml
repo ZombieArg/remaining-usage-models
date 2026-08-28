@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Signed Windows release
+    runs-on: windows-latest
+    env:
+      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require signing configuration
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK) -or [string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
+            throw 'WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD must be configured before a public release.'
+          }
+      - run: npm ci
+      - run: npm run verify
+      - run: npm run dist
+      - run: npm run checksums
+      - name: Verify generated signatures
+        shell: pwsh
+        run: |
+          $invalid = Get-ChildItem release -Filter '*.exe' -File |
+            Where-Object { (Get-AuthenticodeSignature -FilePath $_.FullName).Status -ne 'Valid' }
+          if ($invalid) {
+            $invalid | ForEach-Object { Write-Error "Invalid signature: $($_.FullName)" }
+            throw 'The release artifacts are not validly signed.'
+          }
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = @(Get-ChildItem release -Filter '*.exe' -File | ForEach-Object FullName)
+          $assets += 'release\SHA256SUMS.txt'
+          gh release create $env:GITHUB_REF_NAME @assets --title "Remaining Usage $env:GITHUB_REF_NAME" --generate-notes --verify-tag
