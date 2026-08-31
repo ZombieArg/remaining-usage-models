@@ -10,6 +10,8 @@ export type { CodexProbe, StatusProbe };
 export class ProviderService {
   private snapshots = new Map<ProviderId, UsageSnapshot>();
   private resolvedCommands = new Map<ProviderId, string>();
+  /** Per-provider scratch space that survives refreshes, such as which probe worked last. */
+  private readonly memos = new Map<ProviderId, Map<string, string>>();
 
   constructor(
     private readonly getSettings: () => AppSettings,
@@ -34,8 +36,16 @@ export class ProviderService {
     return PROVIDERS.map((provider) => this.snapshots.get(provider)!);
   }
 
-  async refreshAll(): Promise<UsageSnapshot[]> {
-    await Promise.all(PROVIDERS.map((provider) => this.refreshProvider(provider)));
+  /**
+   * Providers answer at very different speeds: Codex over JSON-RPC in seconds,
+   * Claude through a full terminal session. `onSettled` fires per provider so a
+   * fast card is never held back by a slow one.
+   */
+  async refreshAll(onSettled?: (snapshot: UsageSnapshot) => void): Promise<UsageSnapshot[]> {
+    await Promise.all(PROVIDERS.map(async (provider) => {
+      await this.refreshProvider(provider);
+      onSettled?.(this.snapshots.get(provider)!);
+    }));
     return this.getSnapshots();
   }
 
@@ -46,6 +56,7 @@ export class ProviderService {
       const command = await this.findCommand(provider);
       const parsed = await PROVIDER_REGISTRY[provider].read({
         command, settings: this.getSettings(), statusProbe: this.statusProbe, codexProbe: this.codexProbe,
+        memo: this.memoFor(provider),
       });
       const first = parsed.buckets[0];
       this.snapshots.set(provider, {
@@ -65,6 +76,14 @@ export class ProviderService {
         ? { ...previous, state: 'stale', checkedAt, diagnostic }
         : { provider, state: 'unavailable', checkedAt, diagnostic });
     }
+  }
+
+  private memoFor(provider: ProviderId): Map<string, string> {
+    const existing = this.memos.get(provider);
+    if (existing) return existing;
+    const memo = new Map<string, string>();
+    this.memos.set(provider, memo);
+    return memo;
   }
 
   private diagnosticFor(cause: unknown): UsageSnapshot['diagnostic'] {

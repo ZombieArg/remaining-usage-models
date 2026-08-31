@@ -19,9 +19,17 @@ The interface follows the Windows display language: Spanish for `es-*` locales
 - Shows multiple verified windows when a provider exposes them, such as a
   short and an extended period.
 - Refreshes every five minutes, preserves the last verified value as **stale**
-  after a failed read, and never estimates missing limits.
-- Plays an in-app double tone when a verified exhausted limit becomes available
-  again; it does not rely on Windows notification sounds.
+  after a failed read, and never estimates missing limits. A reading nobody
+  managed to refresh is marked stale on age alone.
+- Updates each provider card as soon as that CLI answers, so a fast provider is
+  never held back by a slow one.
+- Shows remaining percentages in the tray tooltip and tints the tray icon by the
+  tightest verified limit, so the window rarely has to be opened.
+- Warns when a verified limit drops past 20% and then 10%, and plays an in-app
+  double tone when an exhausted limit becomes available again; it does not rely
+  on Windows notification sounds.
+- Can start with Windows, and refreshes on wake instead of trusting a timer that
+  does not fire while the machine is asleep.
 
 Read the [privacy notes](PRIVACY.md) and [security model](SECURITY.md) before
 installing.
@@ -92,8 +100,9 @@ executable copied from an issue, chat, fork, or source-code archive.
 
 - No API keys, tokens, cookies, credential files, raw terminal output, source
   code, prompts, or usage snapshots are stored by this application.
-- Only window position, compact mode, refresh interval, configured CLI paths,
-  and the selected Claude workspace are persisted locally.
+- Only window position, compact mode, refresh interval, the start-with-Windows
+  choice, configured CLI paths, and the selected Claude workspace are persisted
+  locally. Usage readings themselves are never written to disk.
 - The provider CLIs retain their normal authenticated network behavior. This
   app does not bypass plan limits, buy credits, reset usage, or send prompts.
 - CLI output and local protocols are not stable public quota APIs. A changed

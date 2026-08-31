@@ -4,9 +4,9 @@ type MessageKey =
   | 'localOverlay' | 'refresh' | 'refreshing' | 'remaining' | 'reset' | 'notReported'
   | 'lastRead' | 'noVerifiedData' | 'updated' | 'stale' | 'unavailable' | 'frequency'
   | 'privacy' | 'claudeWorkspace' | 'chooseWorkspace' | 'noWorkspace' | 'trustHint'
-  | 'minimize' | 'minutes' | 'availabilityRestored' | 'compact' | 'expanded'
+  | 'minimize' | 'minutes' | 'availabilityRestored' | 'lowLimitWarning' | 'compact' | 'expanded'
   | 'searchCli' | 'searching' | 'useThisCli' | 'chooseCliManually' | 'cliHint'
-  | 'noCandidatesFound' | 'detectedCli';
+  | 'noCandidatesFound' | 'detectedCli' | 'refreshingDetail' | 'checking' | 'startWithWindows';
 
 const messages = {
   es: {
@@ -19,12 +19,14 @@ const messages = {
     trustHint: 'Abrí Claude una vez en esta carpeta y confirmá que confiás en ella.',
     minimize: 'Minimizar a la bandeja', minutes: 'cada {count} min',
     availabilityRestored: 'Límite disponible de nuevo: {provider} {bucket} tiene {percent}% restante.',
+    lowLimitWarning: 'Queda poco: {provider} {bucket} está en {percent}%.',
     compact: 'Vista compacta', expanded: 'Vista completa',
     searchCli: 'Buscar automáticamente', searching: 'Buscando…', useThisCli: 'Usar esta',
     chooseCliManually: 'Elegir manualmente…',
     cliHint: 'Suele estar en .codex\\.sandbox-bin, .local\\bin o AppData\\Local\\Programs.',
     noCandidatesFound: 'No encontramos ningún ejecutable en las ubicaciones habituales.',
-    detectedCli: 'CLI',
+    detectedCli: 'CLI', refreshingDetail: 'Consultando las CLI locales…', checking: 'Consultando',
+    startWithWindows: 'Iniciar con Windows',
   },
   en: {
     localOverlay: 'LOCAL MONITOR', refresh: 'Refresh limits', refreshing: 'Refreshing',
@@ -36,12 +38,14 @@ const messages = {
     trustHint: 'Open Claude in this folder once and confirm that you trust it.',
     minimize: 'Minimize to tray', minutes: 'every {count} min',
     availabilityRestored: 'Limit available again: {provider} {bucket} has {percent}% remaining.',
+    lowLimitWarning: 'Running low: {provider} {bucket} is at {percent}%.',
     compact: 'Compact view', expanded: 'Full view',
     searchCli: 'Search automatically', searching: 'Searching…', useThisCli: 'Use this',
     chooseCliManually: 'Choose manually…',
     cliHint: 'Usually under .codex\\.sandbox-bin, .local\\bin or AppData\\Local\\Programs.',
     noCandidatesFound: 'No executable was found in the usual locations.',
-    detectedCli: 'CLI',
+    detectedCli: 'CLI', refreshingDetail: 'Querying the local CLIs…', checking: 'Checking',
+    startWithWindows: 'Start with Windows',
   },
 } as const;
 

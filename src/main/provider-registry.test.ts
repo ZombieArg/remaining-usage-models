@@ -23,13 +23,14 @@ describe('provider registry', () => {
   });
 
   it('keeps each read function bound to its own provider', async () => {
-    const settings = { refreshMinutes: 5, compactMode: false, cliPaths: {}, claudeWorkspace: 'C:\\w' };
+    const settings = { refreshMinutes: 5, compactMode: false, startWithWindows: false, cliPaths: {}, claudeWorkspace: 'C:\\w' };
     const seen: string[] = [];
     const context = {
       command: 'fake',
       settings,
       statusProbe: async () => { seen.push('pty'); return { screen: 'Session limit: 50% remaining' }; },
       codexProbe: async () => { seen.push('app-server'); return { buckets: [{ label: '5 h', remainingPercent: 50 }] }; },
+      memo: new Map<string, string>(),
     };
 
     await PROVIDER_REGISTRY.codex.read(context);
@@ -38,6 +39,29 @@ describe('provider registry', () => {
     seen.length = 0;
     await PROVIDER_REGISTRY.claude.read(context);
     expect(seen).toEqual(['pty']);
+  });
+
+  it('remembers which Claude command exposed the plan windows and tries it first', async () => {
+    const asked: string[] = [];
+    const memo = new Map<string, string>();
+    const context = {
+      command: 'fake',
+      settings: { refreshMinutes: 5, compactMode: false, startWithWindows: false, cliPaths: {}, claudeWorkspace: 'C:\\w' },
+      codexProbe: async () => ({ buckets: [] }),
+      memo,
+      // This Claude build only reports plan windows under /usage.
+      statusProbe: async ({ commandText }: { commandText: string }) => {
+        asked.push(commandText);
+        return { screen: commandText === '/usage\r' ? 'Session limit: 50% remaining' : 'Nothing here' };
+      },
+    };
+
+    await PROVIDER_REGISTRY.claude.read(context);
+    expect(asked).toEqual(['/status\r', '/usage\r']);
+
+    asked.length = 0;
+    await PROVIDER_REGISTRY.claude.read(context);
+    expect(asked).toEqual(['/usage\r']);
   });
 
   it('omits folders whose environment variable is unset', () => {

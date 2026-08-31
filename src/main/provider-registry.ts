@@ -12,6 +12,8 @@ export interface ProviderReadContext {
   settings: AppSettings;
   statusProbe: StatusProbe;
   codexProbe: CodexProbe;
+  /** Survives refreshes, so a provider can skip work it already knows is wasted. */
+  memo: Map<string, string>;
 }
 
 export interface ProviderDefinition {
@@ -33,6 +35,19 @@ function parseProbe(provider: ProviderId, result: PtyProbeResult) {
   if (result.timedOut) throw new Error('timeout');
   if (hasAuthenticationPrompt(result.screen)) throw new Error('login-required');
   return parseUsageStatus(provider, result.screen);
+}
+
+export const CLAUDE_COMMAND_MEMO = 'claude-usage-command';
+const CLAUDE_COMMANDS: PtyProbeOptions['commandText'][] = ['/status\r', '/usage\r'];
+
+/**
+ * Claude versions differ: /status can omit plan windows while /usage exposes
+ * them. Each probe opens a whole terminal session, so the command that worked
+ * last time goes first and the usual refresh pays for one instead of two.
+ */
+function claudeCommandOrder(remembered: string | undefined): PtyProbeOptions['commandText'][] {
+  const first = CLAUDE_COMMANDS.find((candidate) => candidate === remembered);
+  return first ? [first, ...CLAUDE_COMMANDS.filter((candidate) => candidate !== first)] : CLAUDE_COMMANDS;
 }
 
 function probeDiagnostic(result: PtyProbeResult): string {
@@ -75,19 +90,20 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
       env.USERPROFILE && join(env.USERPROFILE, '.claude', 'bin'),
       env.ProgramFiles && join(env.ProgramFiles, 'claude'),
     ),
-    read: async ({ command, settings, statusProbe }) => {
+    read: async ({ command, settings, statusProbe, memo }) => {
       if (!settings.claudeWorkspace) throw new Error('workspace-required');
       const cwd = settings.claudeWorkspace;
       const readyPattern = /(?:What can I help|[›❯])/u;
-      const first = await statusProbe({ command, cwd, readyPattern, commandText: '/status\r' });
-      const parsed = parseProbe('claude', first);
-      if (parsed) return parsed;
-
-      // Claude versions differ: /status can omit plan windows while /usage exposes them.
-      const second = await statusProbe({ command, cwd, readyPattern, commandText: '/usage\r' });
-      const fallback = parseProbe('claude', second);
-      if (fallback) return fallback;
-      throw new Error(probeDiagnostic(second));
+      let last: PtyProbeResult | undefined;
+      for (const commandText of claudeCommandOrder(memo.get(CLAUDE_COMMAND_MEMO))) {
+        last = await statusProbe({ command, cwd, readyPattern, commandText });
+        const parsed = parseProbe('claude', last);
+        if (parsed) {
+          memo.set(CLAUDE_COMMAND_MEMO, commandText);
+          return parsed;
+        }
+      }
+      throw new Error(probeDiagnostic(last!));
     },
   },
 };

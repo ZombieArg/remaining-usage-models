@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parseCodexRateLimits } from './codex-app-server';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { CLIENT_INFO, parseCodexRateLimits } from './codex-app-server';
 
 describe('Codex app-server rate limits', () => {
   it('turns explicit primary and secondary account windows into remaining buckets', () => {
@@ -16,5 +18,12 @@ describe('Codex app-server rate limits', () => {
 
   it('rejects missing or unsafe rate-limit values', () => {
     expect(parseCodexRateLimits({ rateLimits: { primary: { usedPercent: 101 } } })).toBeNull();
+  });
+});
+
+describe('client identity', () => {
+  it('introduces itself with the shipped version, which a release bump must not leave behind', () => {
+    const { name, version } = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    expect(CLIENT_INFO).toEqual({ name, version });
   });
 });

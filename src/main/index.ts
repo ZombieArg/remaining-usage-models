@@ -1,25 +1,39 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, powerMonitor, Tray } from 'electron';
 import { statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { PROVIDERS, type ProviderId } from '../shared/usage';
+import { PROVIDERS, lowestRemainingPercent, type ProviderId, type UsageSnapshot } from '../shared/usage';
 import { findCliCandidates } from './cli-locator';
 import { ProviderService } from './provider-service';
 import { SettingsStore } from './settings-store';
-import { AvailabilityAlertTracker } from './availability-alert';
-import { createTrayIcon } from './tray-icon';
+import { UsageAlertTracker } from './usage-alerts';
+import { createTrayIcon, usageLevel } from './tray-icon';
+import { trayTooltip } from './tray-tooltip';
 
 let mainWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let quitting = false;
 let refreshTimer: NodeJS.Timeout | undefined;
+let lastRefreshAt = 0;
 let refreshInFlight: Promise<ReturnType<ProviderService['getSnapshots']>> | undefined;
+const refreshingProviders = new Set<ProviderId>();
 let store: SettingsStore;
 let providers: ProviderService;
-const availabilityAlerts = new AvailabilityAlertTracker();
+const usageAlerts = new UsageAlertTracker();
 
 // The availability tone is app audio, not a Windows toast sound. This lets it
 // play even when the user has silenced operating-system notifications.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
+// A second copy would mean a second always-on-top overlay, a second tray icon,
+// and a second set of CLI probes every few minutes. Launching again reveals the
+// window that already exists instead.
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  mainWindow.showInactive();
+  mainWindow.focus();
+});
 
 function isSpanish() {
   return app.getLocale().toLocaleLowerCase().startsWith('es');
@@ -42,22 +56,60 @@ function pinCliPath(provider: ProviderId, cliPath: unknown) {
   return settings;
 }
 
+/**
+ * A read can take several seconds per CLI, and the timer and the tray start
+ * them too. Announcing which providers are still being read lets any open
+ * window show progress per card, no matter who asked for the refresh.
+ */
+function announceRefreshState() {
+  mainWindow?.webContents.send('usage:refresh-state', [...refreshingProviders]);
+}
+
 function refresh() {
   if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    await providers.refreshAll();
-    const snapshots = providers.getSnapshots();
-    mainWindow?.webContents.send('usage:snapshots', snapshots);
-    const restored = availabilityAlerts.observe(snapshots);
-    if (restored.length) mainWindow?.webContents.send('usage:availability-restored', restored);
-    return snapshots;
-  })().finally(() => { refreshInFlight = undefined; });
+  for (const provider of PROVIDERS) refreshingProviders.add(provider);
+  announceRefreshState();
+  refreshInFlight = (async () => providers.refreshAll((snapshot) => {
+    // Publishing each provider as it settles keeps Codex, which answers in
+    // seconds, from waiting on a Claude terminal session that can take half a minute.
+    refreshingProviders.delete(snapshot.provider);
+    mainWindow?.webContents.send('usage:snapshots', providers.getSnapshots());
+    updateTray(providers.getSnapshots());
+    announceRefreshState();
+    const alerts = usageAlerts.observe([snapshot]);
+    if (alerts.length) mainWindow?.webContents.send('usage:alerts', alerts);
+  }))().finally(() => {
+    refreshInFlight = undefined;
+    refreshingProviders.clear();
+    lastRefreshAt = Date.now();
+    announceRefreshState();
+    configureRefreshTimer();
+  });
   return refreshInFlight;
 }
 
+/**
+ * Windows owns the login item, so it is asked rather than trusted from the
+ * settings file. A portable build is skipped on purpose: it would register the
+ * temporary unpack path, which is gone by the next boot.
+ */
+function applyStartWithWindows(start: boolean): boolean {
+  if (!app.isPackaged) return start;
+  app.setLoginItemSettings({ openAtLogin: start, path: app.getPath('exe') });
+  return app.getLoginItemSettings().openAtLogin;
+}
+
+/**
+ * Each completed read schedules the next one, rather than a fixed interval that
+ * a suspended machine silently skips. The delay is measured from the last read
+ * that actually happened, so waking up late shortens the wait instead of
+ * hiding it.
+ */
 function configureRefreshTimer() {
-  if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => void refresh(), store.get().refreshMinutes * 60_000);
+  if (refreshTimer) clearTimeout(refreshTimer);
+  const intervalMs = store.get().refreshMinutes * 60_000;
+  const waited = lastRefreshAt ? Date.now() - lastRefreshAt : 0;
+  refreshTimer = setTimeout(() => void refresh(), Math.max(1_000, intervalMs - waited));
 }
 
 function applyCompactMode(compactMode: boolean) {
@@ -106,6 +158,13 @@ function createWindow() {
   });
 }
 
+/** Keeps the tray answering "how much is left" without opening the window. */
+function updateTray(snapshots: UsageSnapshot[]) {
+  if (!tray) return;
+  tray.setToolTip(trayTooltip(snapshots, isSpanish() ? 'sin dato' : 'no data'));
+  tray.setImage(createTrayIcon(usageLevel(lowestRemainingPercent(snapshots))));
+}
+
 function createTray() {
   tray = new Tray(createTrayIcon());
   tray.setToolTip('Remaining Usage');
@@ -122,14 +181,27 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
+  // The losing instance is already quitting; building a window and tray here
+  // would flash a second overlay before it goes.
+  if (!hasSingleInstanceLock) return;
   store = new SettingsStore();
+  // Windows may have dropped the login item since last run, so reconcile the
+  // stored preference against what the operating system actually reports.
+  store.update({ startWithWindows: applyStartWithWindows(store.get().startWithWindows) });
   providers = new ProviderService(() => store.get());
   createWindow();
   createTray();
   configureRefreshTimer();
   void refresh();
 
+  // Timers do not fire while the machine is asleep, and coming back to a
+  // days-old number is exactly when the user is about to trust it.
+  powerMonitor.on('resume', () => void refresh());
+
   ipcMain.handle('usage:get', () => providers.getSnapshots());
+  // The first refresh starts before the window finishes loading, so a fresh
+  // renderer asks for the state instead of waiting for an event it missed.
+  ipcMain.handle('usage:refreshing-providers', () => [...refreshingProviders]);
   ipcMain.handle('usage:refresh', () => refresh());
   ipcMain.handle('settings:get', () => store.get());
   ipcMain.handle('settings:set-refresh-minutes', (_event, minutes: unknown) => {
@@ -155,6 +227,10 @@ app.whenReady().then(() => {
     const folder = result.filePaths[0];
     if (!statSync(folder).isDirectory()) throw new Error('Selected Claude workspace is not a directory.');
     return store.update({ claudeWorkspace: folder });
+  });
+  ipcMain.handle('settings:set-start-with-windows', (_event, start: unknown) => {
+    if (typeof start !== 'boolean') throw new Error('Start with Windows must be boolean.');
+    return store.update({ startWithWindows: applyStartWithWindows(start) });
   });
   ipcMain.handle('cli:find-candidates', (_event, provider: unknown) => findCliCandidates(assertProvider(provider)));
   ipcMain.handle('settings:set-cli-path', async (_event, provider: unknown, cliPath: unknown) => {

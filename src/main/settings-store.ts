@@ -1,11 +1,12 @@
 import { app } from 'electron';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AppSettings } from '../shared/usage';
 
 const DEFAULT_SETTINGS: AppSettings = {
   refreshMinutes: 5,
   compactMode: false,
+  startWithWindows: false,
   cliPaths: {},
 };
 
@@ -13,8 +14,9 @@ export class SettingsStore {
   private settings: AppSettings = { ...DEFAULT_SETTINGS };
   private readonly filePath: string;
 
-  constructor() {
-    this.filePath = join(app.getPath('userData'), 'settings.json');
+  /** The path is injectable so the store can be exercised against a temp directory. */
+  constructor(filePath = join(app.getPath('userData'), 'settings.json')) {
+    this.filePath = filePath;
     this.settings = this.load();
   }
 
@@ -24,7 +26,12 @@ export class SettingsStore {
 
   update(patch: Partial<AppSettings>): AppSettings {
     this.settings = { ...this.settings, ...patch, cliPaths: { ...this.settings.cliPaths, ...patch.cliPaths } };
-    writeFileSync(this.filePath, JSON.stringify(this.settings, null, 2), 'utf8');
+    // Written aside and renamed over: a crash mid-write would otherwise leave
+    // truncated JSON, and load() would silently fall back to defaults, losing
+    // the pinned CLI paths and the chosen workspace.
+    const temporary = `${this.filePath}.tmp`;
+    writeFileSync(temporary, JSON.stringify(this.settings, null, 2), 'utf8');
+    renameSync(temporary, this.filePath);
     return this.get();
   }
 
@@ -35,7 +42,12 @@ export class SettingsStore {
       const refreshMinutes = Number.isInteger(candidate.refreshMinutes) && candidate.refreshMinutes! >= 1 && candidate.refreshMinutes! <= 60
         ? candidate.refreshMinutes!
         : DEFAULT_SETTINGS.refreshMinutes;
-      return { ...DEFAULT_SETTINGS, ...candidate, refreshMinutes, compactMode: candidate.compactMode === true, cliPaths: candidate.cliPaths ?? {} };
+      return {
+        ...DEFAULT_SETTINGS, ...candidate, refreshMinutes,
+        compactMode: candidate.compactMode === true,
+        startWithWindows: candidate.startWithWindows === true,
+        cliPaths: candidate.cliPaths ?? {},
+      };
     } catch {
       return { ...DEFAULT_SETTINGS };
     }

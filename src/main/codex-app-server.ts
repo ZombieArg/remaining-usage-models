@@ -1,6 +1,13 @@
 import { spawn } from 'node:child_process';
 import type { ParsedUsage } from './parsers';
 
+/**
+ * How this app introduces itself to the local app server. The version is
+ * duplicated from package.json because tsconfig pins rootDir to src, so a test
+ * asserts the two stay equal rather than letting them drift apart.
+ */
+export const CLIENT_INFO = { name: 'remaining-usage-models', version: '0.2.0' } as const;
+
 interface RateLimitWindow {
   usedPercent: number;
   windowDurationMins?: number | null;
@@ -91,7 +98,7 @@ export function readCodexRateLimits(command: string, timeoutMs = 12_000): Promis
     child.stdin.write(`${JSON.stringify({
       id: 1,
       method: 'initialize',
-      params: { clientInfo: { name: 'remaining-usage-models', version: '0.1.0' }, capabilities: { experimentalApi: true } },
+      params: { clientInfo: CLIENT_INFO, capabilities: { experimentalApi: true } },
     })}\n`);
   });
 }

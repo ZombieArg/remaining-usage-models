@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ProviderService, type CodexProbe, type StatusProbe } from './provider-service';
 import type { CliLocator } from './cli-locator';
 
 const settings = () => ({
   refreshMinutes: 5,
   compactMode: false,
+  startWithWindows: false,
   cliPaths: { codex: 'fake-codex', claude: 'fake-claude' },
   claudeWorkspace: 'C:\\project',
 });
@@ -35,7 +36,7 @@ describe('ProviderService', () => {
   });
 
   it('reports a missing CLI as cli-not-found instead of a generic probe failure', async () => {
-    const unconfigured = () => ({ refreshMinutes: 5, compactMode: false, cliPaths: {}, claudeWorkspace: 'C:' });
+    const unconfigured = () => ({ refreshMinutes: 5, compactMode: false, startWithWindows: false, cliPaths: {}, claudeWorkspace: 'C:' });
     const probe: StatusProbe = async () => ({ screen: '' });
     const codexProbe: CodexProbe = async () => ({ buckets: [] });
     const locator: CliLocator = async () => { throw new Error('cli-not-found'); };
@@ -77,8 +78,28 @@ describe('ProviderService', () => {
     ]));
   });
 
+  it('publishes the fast provider without waiting for the slow one', async () => {
+    let releaseClaude = () => {};
+    const claudeFinished = new Promise<void>((resolve) => { releaseClaude = resolve; });
+    const probe: StatusProbe = async () => {
+      await claudeFinished;
+      return { screen: 'Session limit: 64% remaining' };
+    };
+    const codexProbe: CodexProbe = async () => ({ buckets: [{ label: '5 h', remainingPercent: 80 }] });
+    const service = new ProviderService(settings, probe, codexProbe);
+
+    const settled: string[] = [];
+    const refresh = service.refreshAll((snapshot) => settled.push(snapshot.provider));
+
+    // Codex has to be reported while the Claude probe is still blocked.
+    await vi.waitFor(() => expect(settled).toEqual(['codex']));
+    releaseClaude();
+    await refresh;
+    expect(settled).toEqual(['codex', 'claude']);
+  });
+
   it('does not start Claude before a workspace is explicitly selected', async () => {
-    const noWorkspace = () => ({ refreshMinutes: 5, compactMode: false, cliPaths: { claude: 'fake-claude' } });
+    const noWorkspace = () => ({ refreshMinutes: 5, compactMode: false, startWithWindows: false, cliPaths: { claude: 'fake-claude' } });
     const probe: StatusProbe = async () => ({ screen: 'Claude usage 80% remaining' });
     const codexProbe: CodexProbe = async () => ({ buckets: [{ label: '5 h', remainingPercent: 80 }] });
     const service = new ProviderService(noWorkspace, probe, codexProbe);
