@@ -1,45 +1,47 @@
-# Releasing Remaining Usage
+# Versioning Remaining Usage
 
-This repository contains source code only. Installers, portable executables,
-checksums, and signatures belong in GitHub Releases, never in Git history.
+This repository contains source code only. It publishes no installers, no
+portable executables and no GitHub Release assets, so there is nothing here
+about build servers or signing keys.
 
-## One-time GitHub configuration
+## Why there are no binaries
 
-Create these repository secrets before publishing a public release:
+Signing a Windows executable requires a code-signing certificate whose private
+key is held on certified hardware. Without one, a published `.exe` triggers
+SmartScreen and gives a user no way to tell a genuine build from a tampered
+one. Telling people to click through that warning on a file they downloaded is
+the habit this project would rather not teach.
 
-- `WIN_CSC_LINK`: encrypted or base64-encoded Windows code-signing certificate
-  accepted by electron-builder.
-- `WIN_CSC_KEY_PASSWORD`: password for that certificate.
+Everyone able to use this app has already installed a provider CLI, so asking
+them to run `npm ci && npm run dist` costs them little and gives them a build
+whose provenance they do not have to take on faith. `node-pty` ships prebuilt
+Windows binaries, so no C++ toolchain is involved.
 
-Keep the certificate and its password outside the repository. The release
-workflow deliberately fails without both secrets, so a tag cannot accidentally
-publish an unsigned executable.
+If that changes, a signed release is a matter of restoring a workflow, not
+redesigning the project.
 
-Enable branch protection for `main`, require the **CI** workflow, and restrict
-who can create version tags. Enable Dependabot alerts and GitHub's private
-vulnerability reporting.
-
-## Create a release
+## Cut a version
 
 1. Update `version` in `package.json` and the matching lockfile metadata.
-2. Run `npm ci` followed by `npm run verify` locally.
-3. Commit the source-only release change and tag it as `v<version>`.
-4. Push the tag. The **Release** workflow builds both Windows targets, writes
-   `SHA256SUMS.txt`, and creates the GitHub Release from that tag.
-5. Download each generated executable from GitHub Releases. Verify its
-   Authenticode signature and SHA-256 checksum before announcing it.
-6. Smoke-test the installer and portable build using an ordinary Windows user
-   account, both with a provider CLI signed in and with one unavailable.
+   `npm version --no-git-tag-version <version>` does both.
+2. Run `npm ci` followed by `npm run verify`.
+3. Commit the version change and tag it as `v<version>`.
+4. Push the branch and the tag. The tag is the release: GitHub serves a source
+   archive for it, and it is what `SECURITY.md` means by the supported version.
 
-Do not attach locally built binaries manually to a public release. A release
-must be traceable to its tag and signed CI build.
-
-## Release checklist
+## Before tagging
 
 - `npm run verify` succeeds with no audit findings.
 - Codex and Claude unavailable/stale states are still fail-safe.
 - Claude workspace trust is still explicitly user-approved.
 - The app launches, minimizes to tray, restores, and persists preferences.
-- The installer and portable executable have the expected version, checksum,
-  and valid code signature.
+- `npm run dist` produces both Windows targets and the installer runs on an
+  ordinary Windows user account, with a provider CLI signed in and with one
+  unavailable.
 - Release notes disclose provider/CLI compatibility changes and known limits.
+
+## Repository configuration
+
+Enable branch protection for `main`, require the **CI** workflow, and restrict
+who can create version tags. Enable Dependabot alerts and GitHub's private
+vulnerability reporting.

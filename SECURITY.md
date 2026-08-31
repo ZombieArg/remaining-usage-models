@@ -2,10 +2,10 @@
 
 ## Supported versions
 
-Only the latest published release is supported with security fixes. No
-prebuilt binaries are published yet, so the supported form is currently a
-build from source at the latest tagged commit. Artifacts shared outside this
-repository are not a trusted distribution channel.
+Only the latest tagged version is supported with security fixes. This project
+publishes no binaries by design, so the supported form is a build you produce
+yourself from that tag. Any executable offered as a build of this project did
+not come from here, and is not a trusted distribution channel.
 
 ## Reporting a vulnerability
 

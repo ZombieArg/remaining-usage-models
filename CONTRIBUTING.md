@@ -15,8 +15,13 @@ npm run dev:electron
 ```
 
 `npm run verify` runs tests, type checks, the production build, and dependency
-audit. Use `npm run dist` to produce a local NSIS installer and portable
-executable in `release/`.
+audit. Use `npm run dist` to produce the NSIS installer and portable executable
+in `release/`, which is also how users install the app: the project publishes no
+binaries. Keep both targets working.
+
+Tests must pass on a machine that has neither provider CLI installed. Inject the
+locator and the probes rather than letting a test reach the real PATH, or it
+will pass for you and fail for everyone else.
 
 ## Adding a provider
 

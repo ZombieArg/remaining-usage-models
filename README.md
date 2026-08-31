@@ -49,52 +49,58 @@ If you need something dependable, fork it. The MIT license is there for that.
 
 ## Install and use
 
-This first public release supports **Windows 10/11** only.
+**Windows 10/11 only.** This project ships source, not binaries: you build the
+installer yourself and run what you built.
 
-> Prebuilt binaries are not published yet. Until they are, use
-> [Build from source](#build-from-source); the numbered steps below describe
-> the installer route for when a release exists.
+That is a deliberate choice rather than a missing feature. Signing a Windows
+executable now requires a certificate whose private key lives on certified
+hardware, and an unsigned download is exactly the thing this app tells you not
+to trust. Everyone who can use this app already has a provider CLI installed,
+so the toolchain is not the barrier it would be for a consumer application.
+
+You need [Node.js](https://nodejs.org/) 20 or newer. No C++ toolchain is
+required: the one native dependency ships prebuilt binaries for Windows.
 
 1. Install the provider CLI or CLIs you want to monitor, then sign in to each
    using its normal, official flow. The app needs no API key and does not
    handle your credentials itself.
-2. Download `Remaining-Usage-Setup-<version>.exe` from the project's
-   **GitHub Releases** page and run it. Node.js and npm are not required for
-   this route.
-3. Launch **Remaining Usage**. A missing or unauthenticated provider is shown
+2. Build it:
+
+   ```powershell
+   git clone https://github.com/ZombieArg/remaining-usage-models.git
+   cd remaining-usage-models
+   npm ci
+   npm run verify
+   npm run dist
+   ```
+
+3. Run the installer written to `release/`. `Remaining-Usage-Setup-<version>.exe`
+   installs the app for the current Windows user; the portable
+   `Remaining-Usage-<version>-portable.exe` runs unpacked and adds no installed
+   application entry.
+4. Launch **Remaining Usage**. A missing or unauthenticated provider is shown
    as unavailable; the other provider can still be monitored.
-4. For Claude, select a workspace from the app. Open Claude yourself once in
+5. For Claude, select a workspace from the app. Open Claude yourself once in
    that same folder and approve its workspace-trust prompt if it appears. The
    app will never approve this prompt on your behalf.
 
-The setup executable installs the app for the current Windows user. The
-optional `Remaining-Usage-<version>-portable.exe` is an unpack-and-run build;
-it does not add an installed application entry.
+`npm run verify` in step 2 is not ceremony. It runs the tests, type checks and
+audits dependencies, so a build that is broken or has a known vulnerability
+fails before you install it.
 
-### If Windows SmartScreen warns you
+### Windows will warn you about your own build
 
-Until a release is code-signed, Windows shows a blue "Windows protected your
-PC" screen for the downloaded executable. That warning means the file has no
-established publisher reputation yet. It is not a finding that the file is
-harmful, and it is not a substitute for checking the file yourself.
+The executable you just produced is unsigned, so Windows shows a blue "Windows
+protected your PC" screen the first time you run it. The warning means the file
+has no established publisher reputation, not that anything is wrong with it.
 
-Verify the SHA-256 hash first, as described below. If it matches the published
-`SHA256SUMS.txt`, you may choose **More info** and then **Run anyway**. If the
-hash does not match, delete the file and open an issue.
+You compiled this one from source you can read, on your own machine, so choose
+**More info** and then **Run anyway**. Apply that reasoning only to a build you
+produced yourself. An executable someone sends you from an issue, a chat, a
+fork or a mirror has no such provenance, and this project publishes none to
+compare it against.
 
-### Verify a download
-
-Download `SHA256SUMS.txt` from the same GitHub Release as the executable.
-
-```powershell
-Get-FileHash .\Remaining-Usage-Setup-<version>.exe -Algorithm SHA256
-Get-Content .\SHA256SUMS.txt
-Get-AuthenticodeSignature .\Remaining-Usage-Setup-<version>.exe
-```
-
-The hash must match. Official releases are produced in GitHub Actions and are
-blocked unless the release signing certificate is configured. Do not trust an
-executable copied from an issue, chat, fork, or source-code archive.
+For development, run `npm run dev:electron` after `npm ci`.
 
 ## Privacy and limits
 
@@ -109,35 +115,12 @@ executable copied from an issue, chat, fork, or source-code archive.
   format, missing login, timeout, or untrusted Claude workspace results in
   **unavailable** or **stale**, never a made-up percentage.
 
-## Build from source
-
-Use this route if you want to inspect or modify the application. It produces
-an unsigned local artifact; it is not the recommended route for ordinary end
-users.
-
-```powershell
-git clone https://github.com/ZombieArg/remaining-usage-models.git
-cd remaining-usage-models
-npm ci
-npm run verify
-npm run dist
-npm run checksums
-```
-
-Artifacts are written to `release/` and intentionally ignored by Git:
-
-- `Remaining-Usage-Setup-<version>.exe` — installer.
-- `Remaining-Usage-<version>-portable.exe` — portable build.
-- `SHA256SUMS.txt` — checksums generated locally or by the release workflow.
-
-For development, run `npm run dev:electron` after `npm ci`.
-
 ## Project health
 
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Privacy notes](PRIVACY.md)
-- [Release process](docs/RELEASING.md)
+- [Versioning](docs/RELEASING.md)
 - [MIT License](LICENSE)
 
 Before opening a pull request, run `npm run verify`. Please do not include

@@ -22,7 +22,6 @@
     "dist": "npm run build && electron-builder --win nsis portable",
     "dist:installer": "npm run build && electron-builder --win nsis",
     "dist:portable": "npm run build && electron-builder --win portable",
-    "checksums": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/write-checksums.ps1",
     "icon": "node scripts/build-icon.cjs"
   },
   "dependencies": {
