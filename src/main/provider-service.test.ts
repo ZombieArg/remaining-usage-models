@@ -10,6 +10,13 @@ const settings = () => ({
   claudeWorkspace: 'C:\\project',
 });
 
+/**
+ * Without this the service falls back to the real locator, which searches PATH
+ * and the known install folders. That quietly makes the suite pass only on a
+ * machine that has both CLIs installed, and fail on a clean runner.
+ */
+const locator: CliLocator = async (provider) => `fake-${provider}`;
+
 describe('ProviderService', () => {
   it('normalizes real-like screens and keeps the last verified result after a timeout', async () => {
     let shouldTimeoutCodex = false;
@@ -20,7 +27,7 @@ describe('ProviderService', () => {
       if (shouldTimeoutCodex) throw new Error('timeout');
       return { buckets: [{ label: '5 h', remainingPercent: 80, resetText: '4 hours' }] };
     };
-    const service = new ProviderService(settings, probe, codexProbe);
+    const service = new ProviderService(settings, probe, codexProbe, locator);
 
     await service.refreshAll();
     expect(service.getSnapshots()).toEqual(expect.arrayContaining([
@@ -56,7 +63,7 @@ describe('ProviderService', () => {
       if (attempts === 1) throw new Error('timeout');
       return { buckets: [{ label: '5 h', remainingPercent: 88 }] };
     };
-    const service = new ProviderService(settings, probe, codexProbe);
+    const service = new ProviderService(settings, probe, codexProbe, locator);
 
     await service.refreshAll();
     expect(attempts).toBe(2);
@@ -69,7 +76,7 @@ describe('ProviderService', () => {
     let attempts = 0;
     const probe: StatusProbe = async () => ({ screen: '' });
     const codexProbe: CodexProbe = async () => { attempts += 1; throw new Error('timeout'); };
-    const service = new ProviderService(settings, probe, codexProbe);
+    const service = new ProviderService(settings, probe, codexProbe, locator);
 
     await service.refreshAll();
     expect(attempts).toBe(2);
@@ -86,7 +93,7 @@ describe('ProviderService', () => {
       return { screen: 'Session limit: 64% remaining' };
     };
     const codexProbe: CodexProbe = async () => ({ buckets: [{ label: '5 h', remainingPercent: 80 }] });
-    const service = new ProviderService(settings, probe, codexProbe);
+    const service = new ProviderService(settings, probe, codexProbe, locator);
 
     const settled: string[] = [];
     const refresh = service.refreshAll((snapshot) => settled.push(snapshot.provider));
@@ -102,7 +109,7 @@ describe('ProviderService', () => {
     const noWorkspace = () => ({ refreshMinutes: 5, compactMode: false, startWithWindows: false, cliPaths: { claude: 'fake-claude' } });
     const probe: StatusProbe = async () => ({ screen: 'Claude usage 80% remaining' });
     const codexProbe: CodexProbe = async () => ({ buckets: [{ label: '5 h', remainingPercent: 80 }] });
-    const service = new ProviderService(noWorkspace, probe, codexProbe);
+    const service = new ProviderService(noWorkspace, probe, codexProbe, locator);
     await service.refreshAll();
     expect(service.getSnapshots()).toEqual(expect.arrayContaining([
       expect.objectContaining({ provider: 'claude', state: 'unavailable', diagnostic: 'workspace-required' }),
