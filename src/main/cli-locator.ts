@@ -67,17 +67,23 @@ export async function findCliCandidates(provider: ProviderId, deps: LocatorDeps 
 }
 
 /**
- * Resolution order: the path the user pinned, then PATH, then known install
- * locations. Throws 'cli-not-found' so the caller reports the real reason.
+ * Resolution order: the path the user pinned, then a real .exe on PATH, then
+ * known install locations, then a PATH match that isn't a real executable
+ * (typically an npm .cmd/.bat shim). That shim is a last resort rather than an
+ * early return: the probes spawn without a shell, so handing one straight
+ * back would trade a working known-folder .exe for an EINVAL. Throws
+ * 'cli-not-found' so the caller reports the real reason.
  */
 export async function locateCli(provider: ProviderId, configured?: string, deps: LocatorDeps = defaultDeps): Promise<string> {
   if (configured && deps.exists(configured)) return configured;
+  let pathMatch: string | undefined;
   try {
-    const [best] = rankPathResults(await deps.runWhere(provider));
-    if (best) return best;
+    [pathMatch] = rankPathResults(await deps.runWhere(provider));
   } catch { /* normalized below */ }
+  if (pathMatch && /\.exe$/i.test(pathMatch)) return pathMatch;
   for (const candidate of knownLocationCandidates(provider, deps.env)) {
     if (deps.exists(candidate)) return candidate;
   }
+  if (pathMatch) return pathMatch;
   throw new Error('cli-not-found');
 }

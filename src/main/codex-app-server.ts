@@ -60,10 +60,13 @@ export function readCodexRateLimits(command: string, timeoutMs = 12_000): Promis
   return new Promise((resolve, reject) => {
     const child = spawn(command, ['app-server'], {
       cwd: process.env.USERPROFILE ?? process.cwd(), windowsHide: true,
-      stdio: ['pipe', 'pipe', 'ignore'], env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe'], env: process.env,
     });
     let buffer = '';
+    let stderrText = '';
     let settled = false;
+    /** Keeps the concrete cause (spawn error, exit code, stderr, JSON-RPC error text) visible instead of collapsing every failure into the same opaque code. */
+    const probeFailed = (detail?: string) => new Error('probe-failed', detail ? { cause: detail } : undefined);
     const finish = (value?: ParsedUsage, error?: Error) => {
       if (settled) return;
       settled = true;
@@ -72,10 +75,14 @@ export function readCodexRateLimits(command: string, timeoutMs = 12_000): Promis
       if (error) reject(error); else resolve(value!);
     };
     const timeout = setTimeout(() => finish(undefined, new Error('timeout')), timeoutMs);
-    child.once('error', () => finish(undefined, new Error('probe-failed')));
+    child.once('error', (err) => finish(undefined, probeFailed(err.message)));
+    child.once('exit', (code) => finish(undefined, probeFailed(
+      [code !== null ? `exit code ${code}` : undefined, stderrText.trim()].filter(Boolean).join(': ') || undefined,
+    )));
+    child.stderr.on('data', (data: Buffer) => { stderrText += data.toString('utf8'); });
     child.stdout.on('data', (data: Buffer) => {
       buffer += data.toString('utf8');
-      if (buffer.length > 250_000) return finish(undefined, new Error('probe-failed'));
+      if (buffer.length > 250_000) return finish(undefined, probeFailed('response exceeded 250KB without completing'));
       let delimiter: number;
       while ((delimiter = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, delimiter).trim();
@@ -92,7 +99,11 @@ export function readCodexRateLimits(command: string, timeoutMs = 12_000): Promis
           finish(parsed ?? undefined, parsed ? undefined : new Error('incompatible-output'));
           continue;
         }
-        if (message.error) finish(undefined, new Error(/auth|login|sign in/i.test(message.error.message ?? '') ? 'login-required' : 'probe-failed'));
+        if (message.error) {
+          finish(undefined, /auth|login|sign in/i.test(message.error.message ?? '')
+            ? new Error('login-required')
+            : probeFailed(message.error.message));
+        }
       }
     });
     child.stdin.write(`${JSON.stringify({

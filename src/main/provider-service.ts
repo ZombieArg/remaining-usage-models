@@ -72,9 +72,10 @@ export class ProviderService {
       });
     } catch (cause) {
       const diagnostic = this.diagnosticFor(cause);
+      const diagnosticDetail = cause instanceof Error && typeof cause.cause === 'string' ? cause.cause : undefined;
       this.snapshots.set(provider, previous.state === 'ready' || previous.state === 'stale'
-        ? { ...previous, state: 'stale', checkedAt, diagnostic }
-        : { provider, state: 'unavailable', checkedAt, diagnostic });
+        ? { ...previous, state: 'stale', checkedAt, diagnostic, diagnosticDetail }
+        : { provider, state: 'unavailable', checkedAt, diagnostic, diagnosticDetail });
     }
   }
 

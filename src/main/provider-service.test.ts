@@ -72,6 +72,17 @@ describe('ProviderService', () => {
     ]));
   });
 
+  it('keeps the underlying reason behind a generic probe failure', async () => {
+    const probe: StatusProbe = async () => ({ screen: '' });
+    const codexProbe: CodexProbe = async () => { throw new Error('probe-failed', { cause: 'ENOENT: spawn failed' }); };
+    const service = new ProviderService(settings, probe, codexProbe, locator);
+
+    await service.refreshAll();
+    expect(service.getSnapshots()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: 'codex', state: 'unavailable', diagnostic: 'probe-failed', diagnosticDetail: 'ENOENT: spawn failed' }),
+    ]));
+  });
+
   it('gives up after the retry and keeps reporting the timeout', async () => {
     let attempts = 0;
     const probe: StatusProbe = async () => ({ screen: '' });
