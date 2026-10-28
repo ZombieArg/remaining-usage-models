@@ -41,7 +41,7 @@
     "jsdom": "^29.1.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
-    "vitest": "^3.0.0"
+    "vitest": "^5.0.5"
   },
   "build": {
     "appId": "com.zombiearg.remainingusage",
