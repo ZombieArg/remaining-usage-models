@@ -1,6 +1,6 @@
 {
   "name": "remaining-usage-models",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "author": "ZombieArg",
   "description": "Local Windows desktop monitor for Codex and Claude plan usage.",
@@ -76,5 +76,8 @@
     "portable": {
       "artifactName": "Remaining-Usage-${version}-portable.exe"
     }
+  },
+  "overrides": {
+    "minimatch@>=7.0.0 <11.0.1": "^11.0.1"
   }
 }

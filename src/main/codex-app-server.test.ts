@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CLIENT_INFO, parseCodexRateLimits } from './codex-app-server';
+import { CLIENT_INFO, parseCodexRateLimits, readCodexRateLimits } from './codex-app-server';
 
 describe('Codex app-server rate limits', () => {
   it('turns explicit primary and secondary account windows into remaining buckets', () => {
@@ -18,6 +18,27 @@ describe('Codex app-server rate limits', () => {
 
   it('rejects missing or unsafe rate-limit values', () => {
     expect(parseCodexRateLimits({ rateLimits: { primary: { usedPercent: 101 } } })).toBeNull();
+  });
+});
+
+describe('readCodexRateLimits failure detail', () => {
+  // Node itself stands in for the CLI here, per CONTRIBUTING.md: tests must not
+  // depend on a real provider CLI being installed on the machine that runs them.
+  it('carries the spawn error as the diagnostic detail instead of a bare probe-failed', async () => {
+    await expect(readCodexRateLimits('C:\\definitely\\does-not-exist\\codex.exe', 5_000)).rejects.toMatchObject({
+      message: 'probe-failed',
+      cause: expect.stringContaining('ENOENT'),
+    });
+  });
+
+  it('carries the exit code and stderr when the process exits without ever answering', async () => {
+    // `node app-server` fails fast: Node treats the fixed arg as a missing script
+    // and exits non-zero with a message on stderr, exactly like a CLI too old to
+    // understand the app-server subcommand would.
+    await expect(readCodexRateLimits(process.execPath, 5_000)).rejects.toMatchObject({
+      message: 'probe-failed',
+      cause: expect.stringContaining('exit code'),
+    });
   });
 });
 

@@ -1,8 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, powerMonitor, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, powerMonitor, Tray, utilityProcess } from 'electron';
 import { statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { PROVIDERS, lowestRemainingPercent, type ProviderId, type UsageSnapshot } from '../shared/usage';
 import { findCliCandidates } from './cli-locator';
+import { describeError, FileLogger } from './logger';
+import { ProbeHostClient } from './probe-client';
 import { ProviderService } from './provider-service';
 import { SettingsStore } from './settings-store';
 import { UsageAlertTracker } from './usage-alerts';
@@ -18,6 +20,8 @@ let refreshInFlight: Promise<ReturnType<ProviderService['getSnapshots']>> | unde
 const refreshingProviders = new Set<ProviderId>();
 let store: SettingsStore;
 let providers: ProviderService;
+let probes: ProbeHostClient | undefined;
+const logger = new FileLogger(join(app.getPath('userData'), 'logs', 'main.log'));
 const usageAlerts = new UsageAlertTracker();
 
 // The availability tone is app audio, not a Windows toast sound. This lets it
@@ -39,8 +43,14 @@ function isSpanish() {
   return app.getLocale().toLocaleLowerCase().startsWith('es');
 }
 
-process.on('uncaughtException', (error) => console.error('Fatal main-process error:', error));
-process.on('unhandledRejection', (reason) => console.error('Unhandled main-process rejection:', reason));
+process.on('uncaughtException', (error) => {
+  console.error('Fatal main-process error:', error);
+  void logger.log(`uncaught exception: ${describeError(error)}`);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled main-process rejection:', reason);
+  void logger.log(`unhandled rejection: ${describeError(reason)}`);
+});
 
 function assertProvider(value: unknown): ProviderId {
   if (!PROVIDERS.includes(value as ProviderId)) throw new Error('Unknown provider.');
@@ -73,6 +83,7 @@ function refresh() {
     // Publishing each provider as it settles keeps Codex, which answers in
     // seconds, from waiting on a Claude terminal session that can take half a minute.
     refreshingProviders.delete(snapshot.provider);
+    void logger.log(`${snapshot.provider} ${snapshot.state}${snapshot.diagnostic ? ` ${snapshot.diagnostic}` : ''}`);
     mainWindow?.webContents.send('usage:snapshots', providers.getSnapshots());
     updateTray(providers.getSnapshots());
     announceRefreshState();
@@ -146,10 +157,14 @@ function createWindow() {
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   mainWindow.loadFile(join(__dirname, '../../renderer/index.html'));
   mainWindow.once('ready-to-show', () => mainWindow?.showInactive());
-  mainWindow.on('move', () => {
+  // 'moved' fires once when a drag ends. 'move' fired on every pixel, and each
+  // event wrote the settings file synchronously on the main thread.
+  mainWindow.on('moved', () => {
     const [x, y] = mainWindow?.getPosition() ?? [];
     if (Number.isInteger(x) && Number.isInteger(y)) store.update({ windowBounds: { x, y } });
   });
+  mainWindow.on('unresponsive', () => void logger.log('window unresponsive'));
+  mainWindow.on('responsive', () => void logger.log('window responsive again'));
   mainWindow.on('close', (event) => {
     if (!quitting) {
       event.preventDefault();
@@ -188,7 +203,12 @@ app.whenReady().then(() => {
   // Windows may have dropped the login item since last run, so reconcile the
   // stored preference against what the operating system actually reports.
   store.update({ startWithWindows: applyStartWithWindows(store.get().startWithWindows) });
-  providers = new ProviderService(() => store.get());
+  void logger.log(`started ${app.getVersion()}`);
+  probes = new ProbeHostClient(
+    () => utilityProcess.fork(join(__dirname, 'probe-host.js'), [], { serviceName: 'Remaining Usage probes' }),
+    (message) => void logger.log(message),
+  );
+  providers = new ProviderService(() => store.get(), probes.statusProbe, probes.codexProbe);
   createWindow();
   createTray();
   configureRefreshTimer();
@@ -260,4 +280,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => undefined);
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => {
+  quitting = true;
+  probes?.dispose();
+});

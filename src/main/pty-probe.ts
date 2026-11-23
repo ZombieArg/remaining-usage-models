@@ -1,15 +1,19 @@
 import * as pty from 'node-pty';
 import { Terminal } from '@xterm/headless';
-import { hasTrustPrompt } from './parsers';
+import { hasAnswer, hasConfirmMenu, hasTrustPrompt } from './parsers';
 
 export interface PtyProbeOptions {
   command: string;
+  /** Fixed flags for the CLI, never user input. */
+  args?: string[];
   cwd: string;
   commandText: '/usage\r' | '/status\r';
   readyPattern: RegExp;
   /** Optional fixed menu choice, sent only after the exact expected read-only menu is rendered. */
   followUp?: { promptPattern: RegExp; input: string };
   timeoutMs?: number;
+  /** How long the screen must stay unchanged after the ready prompt before the command is sent. */
+  readyQuietMs?: number;
 }
 
 export interface PtyProbeResult {
@@ -17,6 +21,8 @@ export interface PtyProbeResult {
   screen: string;
   timedOut?: boolean;
   trustRequired?: boolean;
+  /** A startup menu other than the trust prompt was waiting for an answer. */
+  dialogRequired?: boolean;
   exitCode?: number;
 }
 
@@ -36,6 +42,7 @@ function screenText(terminal: Terminal): string {
  */
 export function runUsageProbe(options: PtyProbeOptions): Promise<PtyProbeResult> {
   const timeoutMs = options.timeoutMs ?? 35_000;
+  const readyQuietMs = options.readyQuietMs ?? 400;
   return new Promise((resolve, reject) => {
     const terminalScreen = new Terminal({
       cols: 140, rows: 50, scrollback: 120, allowProposedApi: true, windowsPty: { backend: 'conpty' },
@@ -46,12 +53,15 @@ export function runUsageProbe(options: PtyProbeOptions): Promise<PtyProbeResult>
     let commandSent = false;
     let followUpSent = false;
     let settleTimer: NodeJS.Timeout | undefined;
+    let readyTimer: NodeJS.Timeout | undefined;
+    let beforeCommand: ReadonlySet<string> = new Set();
 
     const finish = (result: Omit<PtyProbeResult, 'screen'>, error?: Error) => {
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
       if (settleTimer) clearTimeout(settleTimer);
+      if (readyTimer) clearTimeout(readyTimer);
       try { terminal?.kill(); } catch { /* process already stopped */ }
       const full = { ...result, screen: screenText(terminalScreen) };
       terminalScreen.dispose();
@@ -60,7 +70,7 @@ export function runUsageProbe(options: PtyProbeOptions): Promise<PtyProbeResult>
 
     const deadline = setTimeout(() => finish({ timedOut: true }), timeoutMs);
     try {
-      terminal = pty.spawn(options.command, [], {
+      terminal = pty.spawn(options.command, options.args ?? [], {
         name: 'xterm-256color', cols: 140, rows: 50, cwd: options.cwd,
         env: { ...process.env, TERM: 'xterm-256color' } as Record<string, string>, useConpty: true,
       });
@@ -78,9 +88,19 @@ export function runUsageProbe(options: PtyProbeOptions): Promise<PtyProbeResult>
         if (settled) return;
         const screen = screenText(terminalScreen);
         if (hasTrustPrompt(screen)) return finish({ trustRequired: true });
+        if (!commandSent && hasConfirmMenu(screen)) return finish({ dialogRequired: true });
         if (!commandSent && options.readyPattern.test(screen)) {
-          commandSent = true;
-          terminal?.write(options.commandText);
+          // A startup menu draws its cursor before its "Enter to confirm" hint,
+          // so the prompt counts as ready only once the screen stops changing.
+          if (readyTimer) clearTimeout(readyTimer);
+          readyTimer = setTimeout(() => {
+            if (settled || commandSent) return;
+            const current = screenText(terminalScreen);
+            if (hasConfirmMenu(current)) return finish({ dialogRequired: true });
+            beforeCommand = new Set(current.split('\n'));
+            commandSent = true;
+            terminal?.write(options.commandText);
+          }, readyQuietMs);
           return;
         }
         if (commandSent && !followUpSent && options.followUp?.promptPattern.test(screen)) {
@@ -88,7 +108,7 @@ export function runUsageProbe(options: PtyProbeOptions): Promise<PtyProbeResult>
           terminal?.write(options.followUp.input);
           return;
         }
-        if (commandSent && (!options.followUp || followUpSent) && /\b(?:usage|limit|quota|remaining|left|available|used|utili[sz]ed|sign in|log in)\b/i.test(screen)) {
+        if (commandSent && (!options.followUp || followUpSent) && hasAnswer(screen, beforeCommand)) {
           if (settleTimer) clearTimeout(settleTimer);
           settleTimer = setTimeout(() => finish({}), 900);
         }

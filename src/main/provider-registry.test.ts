@@ -64,6 +64,29 @@ describe('provider registry', () => {
     expect(asked).toEqual(['/usage\r']);
   });
 
+  it('starts Claude without the browser integration, whose startup prompt blocks the probe', async () => {
+    const seenArgs: (string[] | undefined)[] = [];
+    await PROVIDER_REGISTRY.claude.read({
+      command: 'fake',
+      settings: { refreshMinutes: 5, compactMode: false, startWithWindows: false, cliPaths: {}, claudeWorkspace: 'C:\\w' },
+      codexProbe: async () => ({ buckets: [] }),
+      memo: new Map<string, string>(),
+      statusProbe: async ({ args }) => { seenArgs.push(args); return { screen: 'Session limit: 50% remaining' }; },
+    });
+    expect(seenArgs).toEqual([['--no-chrome']]);
+  });
+
+  it('reports a waiting startup menu instead of an incompatible CLI', async () => {
+    const read = PROVIDER_REGISTRY.claude.read({
+      command: 'fake',
+      settings: { refreshMinutes: 5, compactMode: false, startWithWindows: false, cliPaths: {}, claudeWorkspace: 'C:\\w' },
+      codexProbe: async () => ({ buckets: [] }),
+      memo: new Map<string, string>(),
+      statusProbe: async () => ({ screen: '❯ No, keep browser tools off\nEnter to confirm', dialogRequired: true }),
+    });
+    await expect(read).rejects.toThrow('dialog-required');
+  });
+
   it('omits folders whose environment variable is unset', () => {
     for (const id of PROVIDERS) expect(PROVIDER_REGISTRY[id].knownFolders({}), id).toEqual([]);
   });

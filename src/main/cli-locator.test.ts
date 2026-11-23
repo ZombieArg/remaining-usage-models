@@ -48,6 +48,18 @@ describe('locateCli', () => {
   it('reports cli-not-found rather than a generic failure', async () => {
     await expect(locateCli('codex', undefined, deps())).rejects.toThrow('cli-not-found');
   });
+
+  it('prefers a known-folder .exe over an npm .cmd shim on PATH, since the probes spawn without a shell', async () => {
+    await expect(locateCli('codex', undefined, deps({
+      runWhere: async () => 'C:\\npm\\codex.cmd\r\n',
+      exists: (value) => value === SANDBOX,
+    }))).resolves.toBe(SANDBOX);
+  });
+
+  it('still falls back to a PATH shim when no known-folder executable exists', async () => {
+    const shim = 'C:\\npm\\codex.cmd';
+    await expect(locateCli('codex', undefined, deps({ runWhere: async () => `${shim}\r\n` }))).resolves.toBe(shim);
+  });
 });
 
 describe('findCliCandidates', () => {

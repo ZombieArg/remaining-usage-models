@@ -104,6 +104,28 @@ export function hasAuthenticationPrompt(screen: string): boolean {
   return /(?:sign in|log in|authentication (?:is )?required|not authenticated|please authenticate)/i.test(screen);
 }
 
+/**
+ * A startup menu (an onboarding notice, a new-feature opt-in) waiting for a
+ * choice. Its cursor glyph looks like the input prompt, so without this check
+ * the probe would type the command into the menu and Enter would pick an option.
+ */
+export function hasConfirmMenu(screen: string): boolean {
+  return /\bEnter to (?:confirm|select|continue)\b/i.test(screen);
+}
+
 export function hasTrustPrompt(screen: string): boolean {
   return /(?:quick safety check|trust this folder|yes,? i trust this folder|accessing workspace)/i.test(screen);
+}
+
+/**
+ * Whether the CLI has started answering. Claude queues the command while its
+ * startup hooks run, so only lines drawn after it was sent count: the banner
+ * can name a folder such as "remaining-usage-models", and the prompt line
+ * echoes the command itself ("❯ /usage").
+ */
+export function hasAnswer(screen: string, before: ReadonlySet<string> = new Set()): boolean {
+  const body = screen.split('\n')
+    .filter((line) => !before.has(line) && !/^\s*[›❯>]/u.test(line))
+    .join('\n');
+  return /\b(?:usage|limit|quota|remaining|left|available|used|utili[sz]ed|sign in|log in)\b/i.test(body);
 }

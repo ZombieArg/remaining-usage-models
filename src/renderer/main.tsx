@@ -127,7 +127,7 @@ export function UsageCard({ snapshot, language, locale, refreshing, now, state, 
       <div className="usage-row unavailable-data"><strong>{t('noVerifiedData')}</strong></div>}
     <div className="meta-row"><span>{t('lastRead')}</span><b>{timeLabel(snapshot.observedAt ?? snapshot.checkedAt, locale)}</b></div>
     {snapshot.cliPath && <div className="meta-row"><span>{t('detectedCli')}</span><b className="cli-path" title={snapshot.cliPath}>{snapshot.cliPath}</b></div>}
-    {snapshot.diagnostic && <p className="error">{diagnosticLabel(language, snapshot.diagnostic)}</p>}
+    {snapshot.diagnostic && <p className="error" title={snapshot.diagnosticDetail}>{diagnosticLabel(language, snapshot.diagnostic)}</p>}
     {snapshot.diagnostic === 'cli-not-found' && <CliRecovery provider={snapshot.provider} language={language} onSettings={onSettings} />}
   </article>;
 }

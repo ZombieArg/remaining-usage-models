@@ -16,6 +16,7 @@ export const DIAGNOSTIC_CODES = [
   'login-required',
   'workspace-required',
   'trust-required',
+  'dialog-required',
   'timeout',
   'incompatible-output',
   'probe-failed',
@@ -46,6 +47,8 @@ export interface UsageSnapshot {
   checkedAt: string;
   cliPath?: string;
   diagnostic?: DiagnosticCode;
+  /** Raw detail behind the diagnostic (spawn error, JSON-RPC error text, stderr) when one was captured. Not translated. */
+  diagnosticDetail?: string;
 }
 
 /** Remaining percentages that are worth interrupting the user for, tightest last. */
