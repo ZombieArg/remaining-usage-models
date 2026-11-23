@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasAuthenticationPrompt, hasTrustPrompt, parseUsageStatus, stripAnsi } from './parsers';
+import { hasAuthenticationPrompt, hasConfirmMenu, hasTrustPrompt, parseUsageStatus, stripAnsi } from './parsers';
 
 describe('terminal screen parsing', () => {
   it('removes ANSI presentation bytes from terminal fixtures', () => {
@@ -49,5 +49,16 @@ describe('terminal screen parsing', () => {
     expect(hasAuthenticationPrompt('Please sign in to use Codex')).toBe(true);
     expect(hasTrustPrompt('Quick safety check: Yes, I trust this folder')).toBe(true);
     expect(parseUsageStatus('claude', 'Claude is ready\n100% context left')).toBeNull();
+  });
+});
+
+describe('startup menus', () => {
+  it('recognises a menu waiting for a choice', () => {
+    expect(hasConfirmMenu('Claude in Chrome extension detected\n❯ No, keep browser tools off\n  Yes, use my browser\nEnter to confirm · Esc to keep browser tools off')).toBe(true);
+  });
+
+  it('does not mistake the input prompt or the usage panel for a menu', () => {
+    expect(hasConfirmMenu('❯ Try "edit <filepath> to..."\n⏵⏵ auto mode on (shift+tab to cycle)')).toBe(false);
+    expect(hasConfirmMenu('Current session\n███ 65% used\nEsc to cancel')).toBe(false);
   });
 });

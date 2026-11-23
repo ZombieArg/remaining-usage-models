@@ -104,6 +104,15 @@ export function hasAuthenticationPrompt(screen: string): boolean {
   return /(?:sign in|log in|authentication (?:is )?required|not authenticated|please authenticate)/i.test(screen);
 }
 
+/**
+ * A startup menu (an onboarding notice, a new-feature opt-in) waiting for a
+ * choice. Its cursor glyph looks like the input prompt, so without this check
+ * the probe would type the command into the menu and Enter would pick an option.
+ */
+export function hasConfirmMenu(screen: string): boolean {
+  return /\bEnter to (?:confirm|select|continue)\b/i.test(screen);
+}
+
 export function hasTrustPrompt(screen: string): boolean {
   return /(?:quick safety check|trust this folder|yes,? i trust this folder|accessing workspace)/i.test(screen);
 }

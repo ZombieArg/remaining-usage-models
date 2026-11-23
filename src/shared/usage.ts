@@ -16,6 +16,7 @@ export const DIAGNOSTIC_CODES = [
   'login-required',
   'workspace-required',
   'trust-required',
+  'dialog-required',
   'timeout',
   'incompatible-output',
   'probe-failed',

@@ -32,6 +32,7 @@ function present(...candidates: (string | undefined)[]): string[] {
 /** Turns a probe result into buckets, throwing the diagnostic the screen implies. */
 function parseProbe(provider: ProviderId, result: PtyProbeResult) {
   if (result.trustRequired) throw new Error('trust-required');
+  if (result.dialogRequired) throw new Error('dialog-required');
   if (result.timedOut) throw new Error('timeout');
   if (hasAuthenticationPrompt(result.screen)) throw new Error('login-required');
   return parseUsageStatus(provider, result.screen);
@@ -52,6 +53,7 @@ function claudeCommandOrder(remembered: string | undefined): PtyProbeOptions['co
 
 function probeDiagnostic(result: PtyProbeResult): string {
   if (result.trustRequired) return 'trust-required';
+  if (result.dialogRequired) return 'dialog-required';
   if (result.timedOut) return 'timeout';
   if (hasAuthenticationPrompt(result.screen)) return 'login-required';
   return 'incompatible-output';
@@ -94,9 +96,13 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
       if (!settings.claudeWorkspace) throw new Error('workspace-required');
       const cwd = settings.claudeWorkspace;
       const readyPattern = /(?:What can I help|[›❯])/u;
+      // The browser integration asks an opt-in question at startup once the
+      // Chrome extension is installed. The probe never answers menus, so it
+      // would wait out the deadline on every refresh.
+      const args = ['--no-chrome'];
       let last: PtyProbeResult | undefined;
       for (const commandText of claudeCommandOrder(memo.get(CLAUDE_COMMAND_MEMO))) {
-        last = await statusProbe({ command, cwd, readyPattern, commandText });
+        last = await statusProbe({ command, args, cwd, readyPattern, commandText });
         const parsed = parseProbe('claude', last);
         if (parsed) {
           memo.set(CLAUDE_COMMAND_MEMO, commandText);
