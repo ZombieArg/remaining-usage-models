@@ -12,6 +12,10 @@ service.
 - Local preferences: window position, visibility, compact mode, refresh
   interval, the start-with-Windows choice, configured CLI paths, and the
   selected Claude workspace.
+- A local diagnostic log at `%APPDATA%\remaining-usage-models\logs\main.log`
+  (about 1 MB, plus one older `.1` file). It records when each read ran, how
+  long it took, whether it succeeded, and the error a CLI reported when it
+  failed. It records no percentages or limits, so it is not a usage history.
 
 ## What it does not do
 
