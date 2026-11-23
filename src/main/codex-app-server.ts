@@ -6,7 +6,7 @@ import type { ParsedUsage } from './parsers';
  * duplicated from package.json because tsconfig pins rootDir to src, so a test
  * asserts the two stay equal rather than letting them drift apart.
  */
-export const CLIENT_INFO = { name: 'remaining-usage-models', version: '0.2.0' } as const;
+export const CLIENT_INFO = { name: 'remaining-usage-models', version: '0.2.1' } as const;
 
 interface RateLimitWindow {
   usedPercent: number;
