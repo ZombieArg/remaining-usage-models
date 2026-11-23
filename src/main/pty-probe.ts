@@ -1,6 +1,6 @@
 import * as pty from 'node-pty';
 import { Terminal } from '@xterm/headless';
-import { hasConfirmMenu, hasTrustPrompt } from './parsers';
+import { hasAnswer, hasConfirmMenu, hasTrustPrompt } from './parsers';
 
 export interface PtyProbeOptions {
   command: string;
@@ -54,6 +54,7 @@ export function runUsageProbe(options: PtyProbeOptions): Promise<PtyProbeResult>
     let followUpSent = false;
     let settleTimer: NodeJS.Timeout | undefined;
     let readyTimer: NodeJS.Timeout | undefined;
+    let beforeCommand: ReadonlySet<string> = new Set();
 
     const finish = (result: Omit<PtyProbeResult, 'screen'>, error?: Error) => {
       if (settled) return;
@@ -94,7 +95,9 @@ export function runUsageProbe(options: PtyProbeOptions): Promise<PtyProbeResult>
           if (readyTimer) clearTimeout(readyTimer);
           readyTimer = setTimeout(() => {
             if (settled || commandSent) return;
-            if (hasConfirmMenu(screenText(terminalScreen))) return finish({ dialogRequired: true });
+            const current = screenText(terminalScreen);
+            if (hasConfirmMenu(current)) return finish({ dialogRequired: true });
+            beforeCommand = new Set(current.split('\n'));
             commandSent = true;
             terminal?.write(options.commandText);
           }, readyQuietMs);
@@ -105,7 +108,7 @@ export function runUsageProbe(options: PtyProbeOptions): Promise<PtyProbeResult>
           terminal?.write(options.followUp.input);
           return;
         }
-        if (commandSent && (!options.followUp || followUpSent) && /\b(?:usage|limit|quota|remaining|left|available|used|utili[sz]ed|sign in|log in)\b/i.test(screen)) {
+        if (commandSent && (!options.followUp || followUpSent) && hasAnswer(screen, beforeCommand)) {
           if (settleTimer) clearTimeout(settleTimer);
           settleTimer = setTimeout(() => finish({}), 900);
         }
